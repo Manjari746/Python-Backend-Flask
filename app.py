@@ -1,26 +1,17 @@
 from flask import Flask,jsonify, request
 import sqlite3
+import hashlib
 
 app = Flask(__name__)
 
-# def get_db_connection():
-#     conn= sqlite3.connect("products.db")
-#     conn.row_factory = sqlite3.Row
-#     return conn
-
-#updated function  
+#updated function to establish connection to database 
 def get_db_connection():
     import os
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     db_path= os.path.join(BASE_DIR, "products.db")
-    conn= sqlite3.connect(db_path)
+    conn= sqlite3.connect(db_path, timeout=60)
     conn.row_factory = sqlite3.Row
     return conn
-
-# products = [
-#     {"id": 1, "name": 'Keyboard', "price":89.99 },
-#     {"id":2, "name": 'Mouse', "price":29.34},
-#     {"id":3, "name": 'Printer', "price":100}]
 
 @app.route('/init', methods= ["GET"])
 def init_db():
@@ -31,6 +22,13 @@ def init_db():
                 name TEXT NOT NULL,
                 price REAL NOT NULL
                 )
+                """)
+    # Intialising table users in which users info is stored
+    conn.execute("""
+                CREATE TABLE IF NOT EXISTS users(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE, 
+                password TEXT NOT NULL )
                 """)
     conn.commit()
     conn.close()
@@ -68,6 +66,52 @@ def add_products():
 
     return jsonify({"message": "product has been added!", "product": new_product}) , 201
 
+#  register method - to register the user for the first time
+@app.route("/register", methods = ["POST"])
+def register():
+    data = request.get_json()
+    username= data.get("username")
+    password= data.get("password")
+
+    if not username or not password:
+        return jsonify({"message":"Missing username or password"}),400
+    
+    # converting normal text password into encrypted password 
+    # sha256 is the hashing algo 
+    # with the help of this, if someone tries to access the database, they can't see our password
+    hashed_password= hashlib.sha256(password.encode()).hexdigest()
+
+    # Inserting the username and hashed_password into database
+    try:
+        conn = get_db_connection()
+        conn.execute("INSERT INTO users(username, password) VALUES(?,?)",(username, hashed_password))
+        conn.commit()
+        conn.close()
+        return jsonify({"message":"User registeration is successful!"})
+    
+    except sqlite3.IntegrityError:
+        return jsonify({"error":"username is already exists"}),409
+    
+# login method - to login the user if it already exists
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    username = data.get("username")
+    password= data.get("password")
+
+    if not username or not password:
+        return jsonify({"error":"Missing username or password"})
+    
+    hashed_password = hashlib.sha256(password.encode()).hexdigest()
+    conn = get_db_connection()
+    user = conn.execute("SELECT * FROM users where username = ? and password = ?",(username, hashed_password)).fetchone()
+    conn.close()
+
+    if user: 
+        return jsonify({"message":f"Welcome, {username}!"})
+    else :
+        return jsonify({"error": "Invalid credentials"}),401
+    
 if __name__ == "__main__":
     # Automatically initialize the database whenever run the flask app
     with app.app_context(): 
