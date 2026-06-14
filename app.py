@@ -12,7 +12,7 @@ def require_token(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         token = request.headers.get("Authorization")
-        if token != f"Bearer{API_TOKEN}":
+        if token != f"Bearer {API_TOKEN}":
             return jsonify ({"error":"Unauthorized"}),401
         return f(*args, **kwargs)
     return decorated_function
