@@ -8,6 +8,7 @@ from flask_cors import CORS
 
 API_TOKEN =os.getenv("API_TOKEN")
 app = Flask(__name__)
+CORS(app)
 
 def require_token(f):
     @wraps(f)
